@@ -5,6 +5,7 @@ import numpy as np
 
 
 class StanfordSentiment:
+
     def __init__(self, path=None, tablesize = 1000000):
         if not path:
             path = "utils/datasets/stanfordSentimentTreebank"
@@ -21,15 +22,12 @@ class StanfordSentiment:
         with open(self.path + "/datasetSentences.txt", "r") as f:
             first = True
             for line in f:
-                if first:
+                if first: # 去掉文本的第一行。
                     first = False
                     continue
 
-                splitted = line.strip().split()[1:]
-                # Deal with some peculiar encoding issues with this file
-                # sentences += [[w.lower().decode("utf-8").encode('latin1') for w in splitted]]
+                splitted = line.strip().split()[1:] # 句子内容
                 sentences += [[w.lower() for w in splitted]]
-
 
         self._sentences = sentences
         self._sentlengths = np.array([len(s) for s in sentences])
@@ -42,10 +40,10 @@ class StanfordSentiment:
         if hasattr(self, "_tokens") and self._tokens:
             return self._tokens
 
-        tokens = dict()
-        tokenfreq = dict()
-        wordcount = 0
-        revtokens = []
+        tokens = dict() # 单词到索引
+        tokenfreq = dict() # 单词词频
+        wordcount = 0 # 语料字数
+        revtokens = [] # 索引到单词
         idx = 0
 
         for sentence in self.sentences():
@@ -70,7 +68,7 @@ class StanfordSentiment:
         self._revtokens = revtokens
         return self._tokens
 
-    def numSentences(self):
+    def numSentences(self): # 语料句子数
         if hasattr(self, "_numSentences") and self._numSentences:
             return self._numSentences
         else:
@@ -84,9 +82,7 @@ class StanfordSentiment:
         sentences = self.sentences()
         rejectProb = self.rejectProb()
         tokens = self.tokens()
-        allsentences = [[w for w in s
-            if 0 >= rejectProb[tokens[w]] or random.random() >= rejectProb[tokens[w]]]
-            for s in sentences * 30]
+        allsentences = [[w for w in s if 0 >= rejectProb[tokens[w]] or random.random() >= rejectProb[tokens[w]] ] for s in sentences * 30]
 
         allsentences = [s for s in allsentences if len(s) > 1]
 
@@ -154,7 +150,7 @@ class StanfordSentiment:
             return self._split
 
         split = [[] for i in range(3)]
-        with open(self.path + "/datasetSplit.txt", "r") as f:
+        with open(self.path + "/datasetSplit.txt", "r", encoding='latin1') as f:
             first = True
             for line in f:
                 if first:
