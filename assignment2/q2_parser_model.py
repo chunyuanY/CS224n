@@ -22,7 +22,7 @@ class Config(object):
     embed_size = 50
     hidden_size = 200
     batch_size = 2048
-    n_epochs = 10
+    n_epochs = 15
     lr = 0.001
 
 
@@ -60,9 +60,9 @@ class ParserModel(Model):
         (Don't change the variable names)
         """
         ### YOUR CODE HERE
-        self.input_placeholder = tf.placeholder(dtype=tf.float32, shape=(None, self.config.n_features))
+        self.input_placeholder = tf.placeholder(dtype=tf.int32, shape=(None, self.config.n_features))
         self.labels_placeholder = tf.placeholder(dtype=tf.float32, shape=(None, self.config.n_classes))
-        self.dropout_placeholder = tf.placeholder(dtype=tf.float32, shape=(1,))
+        self.dropout_placeholder = tf.placeholder(dtype=tf.float32)
         ### END YOUR CODE
 
     def create_feed_dict(self, inputs_batch, labels_batch=None, dropout=1):
@@ -90,9 +90,11 @@ class ParserModel(Model):
         ### YOUR CODE HERE
         feed_dict = {
             self.input_placeholder: inputs_batch,
-            self.labels_placeholder: labels_batch,
             self.dropout_placeholder: dropout
         }
+
+        if labels_batch is not None:
+            feed_dict[self.labels_placeholder] = labels_batch
         ### END YOUR CODE
         return feed_dict
 
@@ -114,9 +116,12 @@ class ParserModel(Model):
             embeddings: tf.Tensor of shape (None, n_features*embed_size)
         """
         ### YOUR CODE HERE
-        embeddings = tf.Variable(initial_value= self.pretrained_embeddings)
-        embeddings = tf.nn.embedding_lookup(embeddings, ids= self.input_placeholder)
-        embeddings = tf.reshape(embeddings, shape=(-1,))
+        embeddings = tf.Variable(initial_value=self.pretrained_embeddings)
+        embeddings = tf.nn.embedding_lookup(embeddings, ids=self.input_placeholder)
+        n_features = embeddings.get_shape()[1].value
+        embed_size = embeddings.get_shape()[2].value
+        embeddings = tf.reshape(embeddings, shape=[-1, n_features*embed_size])
+        print(embeddings.get_shape())
         ### END YOUR CODE
         return embeddings
 
@@ -125,7 +130,7 @@ class ParserModel(Model):
         """Adds the 1-hidden-layer NN:
             h = Relu(xW + b1)
             h_drop = Dropout(h, dropout_rate)
-            pred = h_dropU + b2
+            pred = h_drop U + b2
 
         Note that we are not applying a softmax to pred. The softmax will instead be done in
         the add_loss_op function, which improves efficiency because we can use
@@ -148,11 +153,15 @@ class ParserModel(Model):
 
         x = self.add_embedding()
         ### YOUR CODE HERE
-        W = tf.Variable(initial_value=xavier_weight_init(shape=(self.config.n_features*self.config.embed_size, self.config.hidden_size)), dtype=tf.float32 )
-        U = tf.Variable(initial_value=xavier_weight_init(shape=(self.config.n_features*self.config.hidden_size, self.config.n_classes)), dtype=tf.float32 )
+        xavier = xavier_weight_init()
+        W = xavier(shape=(self.config.n_features*self.config.embed_size, self.config.hidden_size))
+        U = xavier(shape=(self.config.hidden_size, self.config.n_classes))
         b1 = tf.zeros(shape=(self.config.hidden_size,))
         b2 = tf.zeros(shape=(self.config.n_classes,))
-        h = tf.nn.relu(tf.matmul(x, W)+b1)
+
+        z = tf.matmul(x, W) + b1
+        h = tf.nn.relu(z)
+        # h_drop = tf.nn.dropout(h, tf.sub(1.0, self.dropout_placeholder) )
         h_drop = tf.nn.dropout(h, self.dropout_placeholder)
         pred = tf.matmul(h_drop, U) + b2
         ### END YOUR CODE
@@ -172,7 +181,7 @@ class ParserModel(Model):
             loss: A 0-d tensor (scalar)
         """
         ### YOUR CODE HERE
-        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self.labels_placeholder, pred) )
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.labels_placeholder, logits=pred) )
         ### END YOUR CODE
         return loss
 
@@ -213,7 +222,7 @@ class ParserModel(Model):
             loss = self.train_on_batch(sess, train_x, train_y)
             prog.update(i + 1, [("train loss", loss)])
 
-        print("Evaluating on dev set",)
+        print("\nEvaluating on dev set",)
         dev_UAS, _ = parser.parse(dev_set)
         print("- dev UAS: {:.2f}".format(dev_UAS * 100.0))
         return dev_UAS
@@ -229,8 +238,6 @@ class ParserModel(Model):
                     print("New best dev UAS! Saving model in ./data/weights/parser.weights")
                     saver.save(sess, './data/weights/parser.weights')
             print()
-
-
 
 
 def main(debug=True):
